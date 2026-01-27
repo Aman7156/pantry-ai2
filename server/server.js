@@ -29,6 +29,7 @@ app.use('/api/inventory', inventoryRoutes); // Points to routes/inventoryRoutes.
 app.use('/api/household', householdRoutes); 
 app.use('/api/user', require('./routes/user'))// Points to routes/householdRoutes.js
 app.use('/api/household', require('./routes/household'));
+app.use('/api/chat', require('./routes/chatRoutes'));
 
 // Root Route (Health Check)
 app.get('/', (req, res) => {

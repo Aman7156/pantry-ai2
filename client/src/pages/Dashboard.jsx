@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Plus,
@@ -25,9 +25,11 @@ import {
 } from "lucide-react";
 import api from "../services/api";
 import UserProfile from "../components/userProfile";
+import { AuthContext } from "../context/AuthContext";
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { logout } = useContext(AuthContext); 
 
   const [items, setItems] = useState([]);
   const [household, setHousehold] = useState(null);
@@ -210,7 +212,7 @@ const Dashboard = () => {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
+    logout(); 
     navigate("/");
   };
 
@@ -265,7 +267,7 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* --- STRATEGY MODAL --- */}
+        {/*  STRATEGY MODAL */}
         {showStrategyModal && (
           <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
             <div className="bg-gray-900/80 border border-white/10 rounded-2xl shadow-2xl max-w-md w-full p-6">
@@ -287,7 +289,7 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* --- ADD TO SHOPPING LIST MODAL --- */}
+        {/* ADD TO SHOPPING LIST MODAL*/}
         {listModalOpen && itemToAdd && (
           <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
             <div className="bg-gray-900/80 border border-white/10 rounded-2xl shadow-2xl max-w-sm w-full p-6 relative">
@@ -386,7 +388,7 @@ const Dashboard = () => {
           {activeTab === "pantry" && (
             <div className="animate-fade-in space-y-8">
 
-              {/* --- 🚀 NEEDS ATTENTION WIDGET --- */}
+              {/* NEEDS ATTENTION WIDGET*/}
               {alertItems.length > 0 && (
                 <div className="bg-red-500/5 border border-red-500/20 rounded-3xl overflow-hidden backdrop-blur-sm shadow-xl">
                   <div className="px-6 py-4 border-b border-red-500/10 flex items-center justify-between bg-red-900/20">
@@ -522,7 +524,7 @@ const Dashboard = () => {
                         <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Item</th>
                         <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Category</th>
                         <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Qty</th>
-                        {/* 👇 NEW COLUMN: EXPIRY DATE */}
+                        {/*EXPIRY DATE */}
                         <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Expiry</th>
                         <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Freshness</th>
                         <th className="px-6 py-4"></th>
@@ -537,7 +539,7 @@ const Dashboard = () => {
                             <td className="px-6 py-5"><span className="bg-white/5 text-gray-400 text-xs px-3 py-1 rounded-full border border-white/5">{item.category}</span></td>
                             <td className="px-6 py-5 text-sm text-gray-400 font-mono">{item.quantity} {item.unit}</td>
                             
-                            {/* 👇 NEW CELL: DISPLAY EXPIRY DATE */}
+                            {/*DISPLAY EXPIRY DATE */}
                             <td className="px-6 py-5 text-sm text-gray-400 font-mono">
                                 {new Date(item.expiryDate).toLocaleDateString()}
                             </td>

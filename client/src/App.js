@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import RecipeSuggestion from './pages/RecipeSuggestion';
 import ShoppingList from './pages/ShoppingList'; 
 import ForgotPassword from './pages/ForgotPassword';
+import FitnessChat from './components/FitnessChat';
 
 const PrivateRoute = ({ children }) => {
   const token = localStorage.getItem('token');
@@ -58,6 +59,7 @@ function App() {
 
           </Routes>
         </div>
+        <FitnessChat />
       </Router>
     </AuthProvider>
   );
