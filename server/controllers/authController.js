@@ -3,7 +3,7 @@ const Household = require('../models/Household');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
-const sendEmail = require('../utils/sendEmail'); 
+const sendEmail = require('../utils/sendEmail');
 
 const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -15,57 +15,57 @@ const calculateActivityLevel = (days) => {
 };
 
 exports.register = async (req, res) => {
-  const { 
-    username, email, password, age, height, weight, gender, 
+  const {
+    username, email, password, age, height, weight, gender,
     workoutDays, allergies, dietaryPreferences,
-    householdAction, joinCode, householdName 
+    householdAction, joinCode, householdName
   } = req.body;
 
   try {
     let user = await User.findOne({ email });
-    
+
     if (user && user.isVerified) {
       return res.status(400).json({ msg: 'User already exists' });
     }
 
     if (user && !user.isVerified) {
-      await User.deleteOne({ email }); 
+      await User.deleteOne({ email });
     }
 
     const newUserId = new mongoose.Types.ObjectId();
     let finalHouseholdId = null;
 
     if (householdAction === 'join') {
-       if (!joinCode) return res.status(400).json({ msg: 'Join Code required' });
-       const householdToJoin = await Household.findOne({ joinCode: joinCode.toUpperCase() });
-       if (!householdToJoin) return res.status(404).json({ msg: 'Invalid Join Code' });
-       finalHouseholdId = householdToJoin._id;
-       await Household.findByIdAndUpdate(finalHouseholdId, { $push: { members: newUserId } });
+      if (!joinCode) return res.status(400).json({ msg: 'Join Code required' });
+      const householdToJoin = await Household.findOne({ joinCode: joinCode.toUpperCase() });
+      if (!householdToJoin) return res.status(404).json({ msg: 'Invalid Join Code' });
+      finalHouseholdId = householdToJoin._id;
+      await Household.findByIdAndUpdate(finalHouseholdId, { $push: { members: newUserId } });
     } else {
-       const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-       const newHousehold = await Household.create({
-         name: householdName || `${username}'s Pantry`,
-         joinCode: newCode,
-         admin: newUserId,
-         members: [newUserId]
-       });
-       finalHouseholdId = newHousehold._id;
+      const newCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const newHousehold = await Household.create({
+        name: householdName || `${username}'s Pantry`,
+        joinCode: newCode,
+        admin: newUserId,
+        members: [newUserId]
+      });
+      finalHouseholdId = newHousehold._id;
     }
 
     const otp = generateOTP();
-    const otpExpires = new Date(Date.now() + 10 * 60 * 1000); 
+    const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
 
     user = new User({
       _id: newUserId,
-      username, email, password, age, height, weight, gender, 
-      workoutDays, 
+      username, email, password, age, height, weight, gender,
+      workoutDays,
       activityLevel: calculateActivityLevel(workoutDays),
       allergies: allergies || [],
-      dietaryPreferences: dietaryPreferences || 'None', 
+      dietaryPreferences: dietaryPreferences || 'None',
       household: finalHouseholdId,
       role: 'member',
       isVerified: false,
-      otp, 
+      otp,
       otpExpires
     });
 
@@ -78,7 +78,7 @@ exports.register = async (req, res) => {
     res.json({ msg: 'OTP Sent', email: email });
 
   } catch (err) {
-    console.error("Register Error:", err.message);
+    console.error('Register Error:', err.message);
     res.status(500).send('Server error');
   }
 };
@@ -100,25 +100,26 @@ exports.verifyEmail = async (req, res) => {
     }
 
     user.isVerified = true;
-    user.otp = undefined; 
+    user.otp = undefined;
     user.otpExpires = undefined;
     await user.save();
 
-    const payload = { 
-      user: { 
-        id: user.id, 
+    const payload = {
+      user: {
+        id: user.id,
         household: user.household,
-        joinCode: 'FETCH_ON_DASHBOARD' 
-      } 
+        joinCode: 'FETCH_ON_DASHBOARD'
+      }
     };
 
-    jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' }, (err, token) => {
+    // Fix #7: Changed from '1h' to '7d' so users stay logged in
+    jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' }, (err, token) => {
       if (err) throw err;
       res.json({ token });
     });
 
   } catch (err) {
-    console.error("Verify Error:", err.message);
+    console.error('Verify Error:', err.message);
     res.status(500).send('Server Error');
   }
 };
@@ -135,28 +136,28 @@ exports.login = async (req, res) => {
     }).populate('household');
 
     if (!user) return res.status(400).json({ msg: 'Invalid Credentials' });
-
     if (!user.isVerified) return res.status(400).json({ msg: 'Please verify your email first.' });
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ msg: 'Invalid Credentials' });
 
-    const payload = { 
-        user: { 
-            id: user.id, 
-            household: user.household?._id, 
-            joinCode: user.household?.joinCode 
-        } 
+    const payload = {
+      user: {
+        id: user.id,
+        household: user.household?._id,
+        joinCode: user.household?.joinCode
+      }
     };
-    
-    jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' }, (err, token) => {
-        if (err) throw err;
-        res.json({ token });
+
+    // Fix #7: Changed from '1h' to '7d'
+    jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' }, (err, token) => {
+      if (err) throw err;
+      res.json({ token });
     });
 
-  } catch (err) { 
+  } catch (err) {
     console.error(err);
-    res.status(500).send('Server Error'); 
+    res.status(500).send('Server Error');
   }
 };
 
@@ -164,19 +165,19 @@ exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
   try {
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ msg: "User not found" });
+    if (!user) return res.status(404).json({ msg: 'User not found' });
 
     const otp = generateOTP();
     user.otp = otp;
     user.otpExpires = Date.now() + 10 * 60 * 1000;
     await user.save();
 
-    await sendEmail(email, otp, "Reset Your Password", "Password Reset Request");
+    await sendEmail(email, otp, 'Reset Your Password', 'Password Reset Request');
 
-    res.json({ msg: "Reset code sent to email" });
+    res.json({ msg: 'Reset code sent to email' });
   } catch (err) {
     console.error(err);
-    res.status(500).send("Server Error");
+    res.status(500).send('Server Error');
   }
 };
 
@@ -184,21 +185,21 @@ exports.resetPassword = async (req, res) => {
   const { email, otp, newPassword } = req.body;
   try {
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ msg: "User not found" });
+    if (!user) return res.status(404).json({ msg: 'User not found' });
 
-    if (user.otp !== otp) return res.status(400).json({ msg: "Invalid Code" });
-    if (user.otpExpires < Date.now()) return res.status(400).json({ msg: "Code Expired" });
+    if (user.otp !== otp) return res.status(400).json({ msg: 'Invalid Code' });
+    if (user.otpExpires < Date.now()) return res.status(400).json({ msg: 'Code Expired' });
 
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(newPassword, salt);
-    
+
     user.otp = undefined;
     user.otpExpires = undefined;
     await user.save();
 
-    res.json({ msg: "Password updated successfully" });
+    res.json({ msg: 'Password updated successfully' });
   } catch (err) {
     console.error(err);
-    res.status(500).send("Server Error");
+    res.status(500).send('Server Error');
   }
 };

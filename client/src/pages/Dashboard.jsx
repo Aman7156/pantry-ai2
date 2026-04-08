@@ -124,8 +124,22 @@ const Dashboard = () => {
   const handleOpenChef = () => setShowStrategyModal(true);
 
   const handleGenerateRecipe = async (strategy) => {
+    // 1. Close the modal
     setShowStrategyModal(false);
-    navigate("/recipe-suggestion", { state: { strategy } });
+
+    // 2. Safety Check: Don't navigate if pantry is empty
+    if (items.length === 0) {
+      showNotification("Your pantry is empty! Add items first.", "error");
+      return;
+    }
+
+    // 3. Navigate AND pass the data
+    navigate("/recipe-suggestion", { 
+      state: { 
+        strategy: strategy, 
+        pantryItems: items // <--- THIS WAS MISSING
+      } 
+    });
   };
 
   const handleAddItem = async (e) => {

@@ -12,14 +12,17 @@ import {
   X, 
   Check, 
   ChefHat, 
-  RefreshCw // <--- Imported Refresh Icon
+  RefreshCw 
 } from 'lucide-react'; 
 import api from '../services/api';
 
 const RecipeSuggestion = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const strategy = location.state?.strategy || 'waste';
+  
+  // 1. Get Strategy and Pantry Items from previous page
+  const strategy = location.state?.strategy || 'waste'; 
+  const pantryItems = location.state?.pantryItems || []; // <--- CRITICAL: Get items to send to ML
 
   const [recipe, setRecipe] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -32,18 +35,30 @@ const RecipeSuggestion = () => {
   const [newListName, setNewListName] = useState('');
   const [addingToList, setAddingToList] = useState(false);
 
-  // --- 1. REUSABLE GENERATE FUNCTION ---
+  // --- 1. REUSABLE GENERATE FUNCTION (UPDATED) ---
   const generateRecipe = async () => {
     setLoading(true);
     setError(null);
     try {
-      // We pass the strategy. 
-      // Note: If your backend supports excluding previous titles, you could pass { strategy, exclude: recipe?.title }
-      const res = await api.post('/inventory/generate-recipe', { strategy });
-      setRecipe(res.data);
+      // Map frontend strategy names to Backend/Python mode names
+      const backendMode = strategy === 'health' ? 'maximize_health' : 'maximize_fridge';
+
+      // Prepare simple list of strings for the ML model
+      const ingredientList = pantryItems.map(item => item.name);
+
+      if (ingredientList.length === 0) {
+        throw new Error("No pantry items found to generate recipes from.");
+      }
+
+      // Call the Node/Python Endpoint
+      const res = await api.get(
+        `/recommend?ingredients=${encodeURIComponent(ingredientList.join(","))}`
+      );
+      setRecipe(res.data.results[0]);
+
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.error || "Failed to generate recipe. The chef might be busy.");
+      setError(err.response?.data?.message || err.message || "The AI Chef burned the meal. Try again.");
     } finally {
       setLoading(false);
     }
@@ -55,12 +70,12 @@ const RecipeSuggestion = () => {
     // eslint-disable-next-line
   }, [strategy]);
 
-  // --- 2. MODAL FUNCTIONS ---
+  // --- 2. MODAL FUNCTIONS (UNCHANGED) ---
   const openAddModal = async (item) => {
     setSelectedItem(item);
     setNewListName(''); 
     try {
-      const res = await api.get('/shopping-lists');
+      const res = await api.get('/shopping-list');
       setUserLists(res.data);
     } catch (err) {
       setUserLists([]); 
@@ -81,6 +96,8 @@ const RecipeSuggestion = () => {
       setAddingToList(false);
     }
   };
+
+
 
   const handleCreateAndAdd = async () => {
     if (!newListName) return;
@@ -106,7 +123,9 @@ const RecipeSuggestion = () => {
             <ChefHat className="w-16 h-16 text-blue-400 animate-bounce relative z-10" />
         </div>
         <h2 className="text-2xl font-bold text-white mt-6">The AI Chef is Cooking...</h2>
-        <p className="text-slate-500 mt-2">Analyzing your pantry for {recipe ? 'another' : 'the best'} {strategy === 'health' ? 'healthy' : 'waste-saving'} meal.</p>
+        <p className="text-slate-500 mt-2">
+           Analyzing {pantryItems.length} ingredients for {recipe ? 'another' : 'the best'} {strategy === 'health' ? 'healthy' : 'waste-saving'} meal.
+        </p>
       </div>
     );
   }
@@ -128,6 +147,12 @@ const RecipeSuggestion = () => {
     );
   }
 
+
+
+  // --- RENDER UI ---
+  // Note: We check if recipe exists to avoid crashes, though loading state handles most of this.
+  if (!recipe) return null; 
+
   return (
     <div className="min-h-screen bg-slate-950 font-sans text-slate-200 pb-12 selection:bg-blue-500/30">
       
@@ -135,7 +160,7 @@ const RecipeSuggestion = () => {
       <div className="relative h-72 md:h-96 w-full">
         {/* Dark overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent z-10"></div>
-        <img src={recipe.image} alt={recipe.title} className="w-full h-full object-cover opacity-80" />
+        <img src={recipe.image || "https://placehold.co/800x400?text=Cooking"} alt={recipe.title} className="w-full h-full object-cover opacity-80" />
         
         <div className="absolute inset-0 z-20 flex flex-col justify-end p-6 md:p-12 max-w-7xl mx-auto w-full">
           
@@ -163,8 +188,8 @@ const RecipeSuggestion = () => {
             <h1 className="text-3xl md:text-5xl font-black text-white mb-4 drop-shadow-xl">{recipe.title}</h1>
             <div className="flex gap-6 text-slate-200 text-sm font-bold bg-black/30 w-fit px-6 py-3 rounded-2xl border border-white/5 backdrop-blur-md">
               <span className="flex items-center gap-2"><Clock className="w-4 h-4 text-blue-400" /> {recipe.time}</span>
-              <span className="flex items-center gap-2"><BarChart className="w-4 h-4 text-orange-400" /> {recipe.difficulty}</span>
-              <span className="flex items-center gap-2">🔥 {recipe.nutrition.calories}</span>
+              <span className="flex items-center gap-2"><BarChart className="w-4 h-4 text-orange-400" /> <span>{recipe.status}</span></span>
+              <span className="flex items-center gap-2">🔥 {recipe.nutrition?.calories || 0} kcal</span>
             </div>
           </div>
         </div>
@@ -177,11 +202,39 @@ const RecipeSuggestion = () => {
           
           {/* Nutrition Cards (Glassmorphism) */}
           <div className="bg-slate-900/60 backdrop-blur-md p-6 rounded-3xl border border-white/10 grid grid-cols-4 gap-4 text-center shadow-2xl">
-             <div><div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Protein</div><div className="text-2xl font-black text-blue-400">{recipe.nutrition.protein}</div></div>
-             <div><div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Carbs</div><div className="text-2xl font-black text-emerald-400">{recipe.nutrition.carbs}</div></div>
-             <div><div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Fats</div><div className="text-2xl font-black text-yellow-400">{recipe.nutrition.fat}</div></div>
-             <div><div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Used</div><div className="text-2xl font-black text-purple-400">{recipe.usedIngredientCount} items</div></div>
-          </div>
+    {/* PROTEIN */}
+    <div>
+        <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Protein</div>
+        <div className="text-2xl font-black text-blue-400">
+            {recipe.nutrition?.protein || '0g'}
+        </div>
+         
+    </div>
+
+    {/* CARBS */}
+    <div>
+        <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Carbs</div>
+        <div className="text-2xl font-black text-emerald-400">
+            {recipe.nutrition?.carbs || '0g'}
+        </div>
+    </div>
+
+    {/* FATS (Label is Plural, Key is Singular 'fat') */}
+    <div>
+        <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Fats</div>
+        <div className="text-2xl font-black text-yellow-400">
+            {recipe.nutrition?.fat || '0g'}
+        </div>
+    </div>
+
+    {/* USED ITEMS (Fixed to count the list length) */}
+    <div>
+        <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Used</div>
+        <div className="text-2xl font-black text-purple-400">
+            {recipe.usedIngredients?.length || 0} items
+        </div>
+    </div>
+</div>
 
           {/* Instructions (Glassmorphism) */}
           <div className="bg-slate-900/60 backdrop-blur-md p-8 rounded-3xl border border-white/10 shadow-2xl">
@@ -189,7 +242,7 @@ const RecipeSuggestion = () => {
               <ChefHat className="w-5 h-5 text-orange-400" /> Step-by-Step Instructions
             </h3>
             <div className="prose prose-invert max-w-none text-slate-300 whitespace-pre-line leading-relaxed font-light">
-              {recipe.instructions}
+            {recipe.instructions?.join("\n\n")}
             </div>
           </div>
         </div>
@@ -205,18 +258,14 @@ const RecipeSuggestion = () => {
             
             <div className="space-y-3 mb-8">
               {recipe.usedIngredients && recipe.usedIngredients.length > 0 ? (
-                recipe.usedIngredients.map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-3 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-                     <img src={item.image} alt={item.name} className="w-10 h-10 rounded-lg object-cover bg-black/20" />
-                     <div className="flex-1">
-                        <div className="font-bold text-sm text-emerald-100 capitalize">{item.name}</div>
-                        <div className="text-xs text-emerald-400/80 font-bold">{item.amount} {item.unit}</div>
-                     </div>
-                     <div className="bg-emerald-500 p-1 rounded-full text-white shadow-lg shadow-emerald-500/20">
-                       <Check className="w-3 h-3" />
-                     </div>
-                  </div>
-                ))
+               recipe.usedIngredients.map((item, idx) => (
+                <div key={idx} className="flex items-center gap-3 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+                   <div className="flex-1">
+                      <div className="font-bold text-sm text-emerald-100 capitalize">{item}</div>
+                   </div>
+                   <Check className="w-4 h-4 text-emerald-400" />
+                </div>
+              ))
               ) : (
                 <div className="text-sm text-slate-500 italic px-2">No pantry items used.</div>
               )}
@@ -230,8 +279,8 @@ const RecipeSuggestion = () => {
               <p className="text-xs text-slate-500 mb-4">Click + to add to your shopping list.</p>
 
               <div className="space-y-3">
-                {recipe.shoppingList && recipe.shoppingList.length > 0 ? (
-                  recipe.shoppingList.map((item, idx) => (
+                {recipe.missingIngredients && recipe.missingIngredients.length > 0 ? (
+                 recipe.missingIngredients.map((item, idx) => (
                     <div key={idx} className="flex items-center justify-between p-3 bg-black/30 rounded-2xl border border-white/5 group hover:border-blue-500/50 transition-all">
                       <div className="flex items-center gap-3">
                         <img src={item.image} alt={item.name} className="w-10 h-10 rounded-lg object-cover bg-black/40" />
